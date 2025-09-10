@@ -1,25 +1,26 @@
-# Bioreactor Simulator (Docker + MQTT + UI)
+# Simulador Simplificado de Biorreator (Docker + MQTT + UI)
+UFSJ/CAP – Engenharia Mecatrônica
+Simulador com dinâmica simplificada para fins didáticos para a disciplina de Sistemas Supervisórios.
 
 Simulador didático de biorreator:
 - **Python** (dinâmica simplificada)
-- **MQTT** para sensores/atuadores
+- **MQTT** para comunicação com sensores/atuadores da planta
 - **UI 2D** em SVG via WebSocket
 - **Docker Compose** para subir tudo
 
 ## Rodando
+Navegue no terminal até a pasta do pacote e execute:
 ```bash
 docker compose up --build
-# UI: http://localhost:8000
-# MQTT: localhost:1883
 ```
 
-## Variáveis de ambiente (serviço `sim`)
-- `MQTT_HOST`/`MQTT_PORT`: broker MQTT
-- `TICK_MS`: período de integração/telemetria (ms)
-- `UI_ENABLED`: `true|false` habilita/desabilita UI e WS
-- `SEED`: semente inicial do simulador (reprodutibilidade)
+- Para visualizar a UI do simulador, acesse no navegador `http://localhost:8000`.
 
-## Tópicos MQTT
+
+## MQTT 
+É levantado um servidor MQTT no endereço: `localhost:1883`
+
+### Tópicos MQTT
 - Sensores (QoS 1, retain): `bioreactor/sensors/{level|temperature|do|ph|agitation_rpm}`
 - Estado agregado (só sensores): `bioreactor/state` (JSON)
 - Atuadores (QoS 1, retain): `bioreactor/actuators/{valve_in|valve_out|heater|aeration|agitation}`
@@ -30,14 +31,10 @@ docker compose up --build
   - `bioreactor/simCmd/reset` (payload opcional: `SEED` numérico)
   - `bioreactor/simCmd/time_scale` (`float`, ex.: `0.5`, `1`, `5`)
 
-## Observações
-- A UI é apenas visualização; opacidade de aquecimento e aeração refletem os comandos.
-- `valve_out` inicia em `1` (aberta) por padrão.
- - O time scale padrão é `1.0` e pode ser alterado via `bioreactor/simCmd/time_scale`.
 
-## Exemplos
+### Exemplos
 
-A partir do host (broker local):
+#### A partir do host (broker local):
 
 ```bash
 # Ajustar time scale para 2.0x (sim mais rápida)
@@ -56,8 +53,10 @@ mosquitto_pub -h localhost -t bioreactor/simCmd/reset -n
 mosquitto_pub -h localhost -t bioreactor/cmd/heater -m 0.7
 mosquitto_pub -h localhost -t bioreactor/cmd/valve_in -m on
 ```
+NOTA: Estes comandos consideram que a máquina host possui o `mosquitto` instalado.
 
-Usando o container do broker (`mqtt`):
+
+#### Usando o container do broker (`mqtt`):
 
 ```bash
 docker compose exec -T mqtt sh -lc "mosquitto_pub -t bioreactor/simCmd/time_scale -m 1.5"
@@ -67,24 +66,11 @@ docker compose exec -T mqtt sh -lc "mosquitto_pub -t bioreactor/simCmd/reset -m 
 docker compose exec -T mqtt sh -lc "mosquitto_sub -t 'bioreactor/state' -C 1 -v"
 docker compose exec -T mqtt sh -lc "mosquitto_sub -t 'bioreactor/actuators/#' -C 5 -v"
 ```
-
-## Tabela rápida de tópicos
-- Sensores: `bioreactor/sensors/{level|temperature|do|ph|agitation_rpm}` — número; QoS 1; retain
-- Estado agregado: `bioreactor/state` — JSON com sensores; QoS 1; retain
-- Atuadores (publicados): `bioreactor/actuators/{valve_in|valve_out|heater|aeration|agitation}` — números (binários: 0/1; analógicos: 0..1); QoS 1; retain
-- Comandos de processo (consumidos):
-  - `bioreactor/cmd/{valve_in|valve_out}` — `0|1|on|off|true|false`
-  - `bioreactor/cmd/{heater|aeration|agitation}` — `0..1` ou `on|off`
-- Comandos de simulação (consumidos):
-  - `bioreactor/simCmd/reset` — payload vazio usa `SEED`; número inteiro define seed
-  - `bioreactor/simCmd/time_scale` — `float` (ex.: `0.0` pausa; `1.0` normal; `>1` acelera; faixa 0..50)
+NOTA: Estes comandos executam comandos do `mosquitto` em execução no container do MQTT.
 
 
-# Como testar
+### Observações
+- A UI é apenas visualização; opacidade de aquecimento e aeração refletem os comandos.
+- `valve_out` inicia em `1` (aberta) por padrão.
+ - O time scale padrão é `1.0` e pode ser alterado via `bioreactor/simCmd/time_scale`.
 
-Subir: docker compose up -d --build
-UI: http://localhost:8000/ui/ (redireciona de /)
-Health: http://localhost:8000/health
-MQTT (no container MQTT):
-docker compose exec -T mqtt sh -lc "mosquitto_pub -t bioreactor/cmd/heater -m 0.8"
-docker compose exec -T mqtt sh -lc "mosquitto_sub -t 'bioreactor/actuators/#' -v -C 5"

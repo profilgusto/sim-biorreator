@@ -1,0 +1,155 @@
+<!doctype html><meta charset="utf-8">
+<title>Simulador Simplificado de Biorreator</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;padding:16px;background:#f6f7fb}
+  #box{max-width:980px;margin:auto;background:#fff;border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.08)}
+  .row{display:flex;gap:24px;align-items:center}
+  .num{font-variant-numeric:tabular-nums}
+</style>
+<div id="box">
+  <h2>Simulador Simplificado de Biorreator – Visualização</h2>
+  <h3>UFSJ/CAP – Engenharia Mecatrônica – Sistemas Supervisórios</h3>
+  <p>Simulador com dinâmica simplificada para fins educacionais – Esta tela exibe os estados atuais de simulação.</p>
+  <div class="row">
+    <svg id="plant" viewBox="0 0 600 260" width="60%">
+      <rect x="40" y="40" width="120" height="180" rx="12" fill="#ddd" stroke="#555"/>
+      <rect id="lvl" x="40" y="220" width="120" height="0" fill="#7cd992"/>
+      <rect x="40" y="40" width="120" height="180" rx="12" fill="none" stroke="#555"/>
+      <circle id="agit" cx="230" cy="130" r="28" fill="#bbb" stroke="#333"/>
+      <rect id="heater" x="90" y="30" width="20" height="8" fill="#f66" opacity="0.2"/>
+      <rect id="air" x="260" y="75" width="18" height="18" fill="#6cf" opacity="0.2"/>
+      <text id="txtL" x="100" y="235" text-anchor="middle" class="num">0%</text>
+    </svg>
+    <div style="flex:1;min-width:260px">
+      <h3>Parâmetros de simulação</h3>
+      <div>Tempo de simulação: <span id="simt" class="num">--:--:--:---</span></div>
+      <div>Escala de tempo: <span id="ts" class="num">1.00</span>x</div>
+      <div style="margin-top:8px">
+        <label>Definir escala de tempo:</label>
+        <input id="tsInput" type="number" step="0.1" value="1.0" style="width:80px"> 
+        <button id="btnSetTs">Aplicar</button>
+      </div>
+      <div style="margin-top:8px">
+        <button id="btnReset">Reiniciar simulação</button>
+      </div>
+
+      <h3 style="margin-top:16px">Variáveis ambientais</h3>
+      <div>Pressão externa (atmosférica): <span id="Pext" class="num">--</span> kPa</div>
+      <div>Temperatura ambiente: <span id="Text" class="num">--</span> °C</div>
+
+      <h3 style="margin-top:16px">Variáveis da planta</h3>
+      <div>Nível do reator: <span id="lvlp" class="num">--</span> %</div>
+      <div>Temperatura da mistura: <span id="t" class="num">--</span> °C</div>
+      <div>Oxigênio dissolvido (OD): <span id="d" class="num">--</span> %</div>
+      <div>pH do meio: <span id="p" class="num">--</span> pH</div>
+      <div>Concentração de biomassa: <span id="x" class="num">--</span> g/L</div>
+      <div>Agitação: <span id="r" class="num">--</span> rpm</div>
+      <div>Pressão interna do headspace: <span id="P" class="num">--</span> kPa</div>
+
+      <h3 style="margin-top:16px">Estado dos atuadores</h3>
+      <div>Válvula de entrada: <span id="vi" class="num">--</span></div>
+      <div>Válvula de saída: <span id="vo" class="num">--</span></div>
+      <div>Aquecimento: <span id="h" class="num">--</span> %</div>
+      <div>Aeração: <span id="a" class="num">--</span> %</div>
+      <div>Agitação (fração): <span id="ag" class="num">--</span> %</div>
+      <div>Exaustão (vent): <span id="ve" class="num">--</span> %</div>
+    </div>
+  </div>
+</div>
+<div style="margin-top:16px">
+  <h3>Legenda do esquema</h3>
+  <div>Tanque: retângulo cinza com bordas — representa o vaso do biorreator.</div>
+  <div>Nível do líquido: retângulo verde — altura proporcional ao nível do reator (%).</div>
+  <div>Agitador: círculo — muda para verde quando a rotação (rpm) está mais alta.</div>
+  <div>Aquecedor: retângulo vermelho — opacidade indica a potência relativa do aquecedor.</div>
+  <div>Aeração: retângulo azul — opacidade indica a taxa de aeração (fluxo de ar).</div>
+</div>
+<script>
+  // Formata segundos de simulação como HH:mm:ss:ms (ms com 3 dígitos)
+  function formatSimTime(sec){
+    if (typeof sec !== 'number' || !isFinite(sec)) return '--:--:--:---';
+    const totalMs = Math.max(0, Math.floor(sec*1000));
+    const ms = totalMs % 1000;
+    const totalSec = Math.floor(totalMs/1000);
+    const s = totalSec % 60;
+    const m = Math.floor(totalSec/60) % 60;
+    const h = Math.floor(totalSec/3600);
+    const pad2 = n => String(n).padStart(2,'0');
+    const pad3 = n => String(n).padStart(3,'0');
+    return `${pad2(h)}:${pad2(m)}:${pad2(s)}:${pad3(ms)}`;
+  }
+  const ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  // Flag para não sobrescrever o campo de time scale enquanto o usuário edita
+  let tsEditing = false;
+  const tsInputEl = document.getElementById('tsInput');
+  if (tsInputEl) {
+    tsInputEl.addEventListener('focus', ()=>{ tsEditing = true; });
+    tsInputEl.addEventListener('input', ()=>{ tsEditing = true; });
+    tsInputEl.addEventListener('blur',  ()=>{ tsEditing = false; });
+    tsInputEl.addEventListener('change',()=>{ tsEditing = false; });
+  }
+  ws.onmessage = e=>{
+    const s = JSON.parse(e.data);
+    // Plant measurements
+    document.getElementById('t').textContent = s.temperature.toFixed(2);
+    document.getElementById('d').textContent = s.do.toFixed(1);
+    document.getElementById('p').textContent = s.ph.toFixed(2);
+    document.getElementById('r').textContent = s.agitation_rpm.toFixed(0);
+    document.getElementById('x').textContent = (s.biomass ?? 0).toFixed(3);
+    document.getElementById('lvlp').textContent = s.level.toFixed(0);
+    document.getElementById('txtL').textContent = s.level.toFixed(0)+'%';
+    if (typeof s.pressure_kpa === 'number') {
+      document.getElementById('P').textContent = s.pressure_kpa.toFixed(1);
+    }
+    if (typeof s.pressure_ext_kpa === 'number') {
+      document.getElementById('Pext').textContent = s.pressure_ext_kpa.toFixed(1);
+    }
+    if (typeof s.temperature_ext_c === 'number') {
+      document.getElementById('Text').textContent = s.temperature_ext_c.toFixed(1);
+    }
+    const h = 1.8*s.level; const y = 220 - h;
+    const lvl = document.getElementById('lvl');
+    lvl.setAttribute('height', h); lvl.setAttribute('y', y);
+    // Actuator intensities for visuals
+    const heater = Math.max(0, Math.min(1, +(s.heater ?? 0)));
+    const aer = Math.max(0, Math.min(1, +(s.aeration ?? 0)));
+    document.getElementById('heater').setAttribute('opacity', (0.2 + 0.6*heater).toFixed(3));
+    document.getElementById('air').setAttribute('opacity', (0.2 + 0.6*aer).toFixed(3));
+    const agit = document.getElementById('agit');
+    agit.setAttribute('fill', s.agitation_rpm>150? '#7cd992' : '#bbb');
+    // Simulation params
+    if (typeof s.time_scale === 'number') {
+      document.getElementById('ts').textContent = s.time_scale.toFixed(2);
+      const tsIn = document.getElementById('tsInput');
+      // Só sincroniza o input quando não está em edição pelo usuário
+      if (tsIn && !tsEditing && document.activeElement !== tsIn) {
+        tsIn.value = s.time_scale.toFixed(2);
+      }
+    }
+    if (typeof s.t === 'number') document.getElementById('simt').textContent = formatSimTime(s.t);
+    // Actuator states
+    document.getElementById('vi').textContent = (s.valve_in? 'Aberta' : 'Fechada');
+    document.getElementById('vo').textContent = (s.valve_out? 'Aberta' : 'Fechada');
+    document.getElementById('h').textContent = (100*heater).toFixed(0);
+    document.getElementById('a').textContent = (100*aer).toFixed(0);
+    document.getElementById('ag').textContent = (100*Math.max(0, Math.min(1, +(s.agitation ?? 0)))).toFixed(0);
+    document.getElementById('ve').textContent = (100*Math.max(0, Math.min(1, +(s.vent ?? 0)))).toFixed(0);
+  };
+
+  // UI controls via HTTP endpoints on the same server
+  const postJSON = (url, data) => fetch(url, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: data? JSON.stringify(data) : undefined
+  }).then(r=>r.json()).catch(()=>({ok:false}));
+
+  document.getElementById('btnReset').onclick = async ()=>{
+    const res = await postJSON('/api/sim/reset');
+  };
+  document.getElementById('btnSetTs').onclick = async ()=>{
+    const v = parseFloat(document.getElementById('tsInput').value);
+    if (!isFinite(v)) return;
+    const res = await postJSON('/api/sim/time_scale', {value: v});
+    // Após aplicar, consideramos a edição concluída
+    tsEditing = false;
+  };
+</script>

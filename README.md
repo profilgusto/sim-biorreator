@@ -1,4 +1,4 @@
-# Simulador Simplificado de Biorreator (Docker + MQTT + UI)
+# Simulador Simplificado de Biorreator
 UFSJ/CAP – Engenharia Mecatrônica
 Simulador com dinâmica simplificada para fins didáticos para a disciplina de Sistemas Supervisórios.
 

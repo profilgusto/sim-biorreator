@@ -16,7 +16,6 @@ docker compose up --build
 
 - Para visualizar a UI do simulador, acesse no navegador `http://localhost:8000`.
 
-
 ## MQTT 
 É levantado um servidor MQTT no endereço: `localhost:1883`
 

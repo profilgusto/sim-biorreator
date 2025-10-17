@@ -9,8 +9,7 @@ services:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
   sim:
-    build: ./sim
-    image: profilgusto/bioreactor-sim:latest
+    image: profilgusto/bioreactor-sim:ui-baked
     container_name: bioreactor-sim
     depends_on: [mqtt]
     environment:
@@ -24,8 +23,9 @@ services:
       - "8000:8000"   # UI do simulador
     networks:
       - net-nodered
-    volumes:
-      - ./ui:/app/ui:ro
+    # UI is baked into the image at build time (copied from the repo's `ui/` folder)
+    # so we don't mount a host `./ui` directory here. This makes the container
+    # self-contained and runnable on other machines without the host UI folder.
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)\""]
       interval: 10s

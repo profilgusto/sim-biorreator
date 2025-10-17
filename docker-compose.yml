@@ -10,7 +10,7 @@ services:
 
   sim:
     build: ./sim
-    image: bioreactor-sim:dev
+    image: profilgusto/bioreactor-sim:latest
     container_name: bioreactor-sim
     depends_on: [mqtt]
     environment:

@@ -1,0 +1,9 @@
+# .dockerignore (na raiz do repo)
+.git
+**/__pycache__/
+**/*.pyc
+.env
+venv
+.venv
+docs
+ui/static/*   # se for servir estaticamente por outro container

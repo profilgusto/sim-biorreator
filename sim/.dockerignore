@@ -9,4 +9,5 @@ build
 dist
 .git
 .gitignore
+ui
 docs
